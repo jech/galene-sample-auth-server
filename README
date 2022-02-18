@@ -1,0 +1,28 @@
+This is a sample authentication server for the Galene videoconference
+server <https://galene.org>.
+
+You should first modify the function `user_permissions` to do
+authentication suitable for your site, for example by consulting an LDAP
+database.
+
+Then, generate a JWK:
+
+    jose jwk gen -i '{"alg":"ES256"}' -o private.jwk
+    jose jwk pub -i private.jwk -o public.jwk
+
+Run the auth server:
+
+    python galene-sample-auth-server.py -k private.jwk -p 1234
+
+And finally configure a group in Galene:
+
+    {
+        "authServer": "http://localhost:1234/",
+        "authKeys": [
+            {...insert public key here... }
+        ]
+    }
+
+
+    
+  
