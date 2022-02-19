@@ -51,8 +51,8 @@ groups = {
 # This function should be replaced with one that authentifies users,
 # e.g. by checking with an LDAP server.
 def user_permissions(location, username, password):
-    '''returns a permissions dictionary if the user is authorised to log into
-       the group, None otherwise.  The returned dictionary may have keys
+    '''returns a list of permissions if the user is authorised to log into
+       the group, None otherwise.  The returned list may contain the strings
        "present", "record" and "op".
     '''
 
@@ -76,7 +76,7 @@ def user_permissions(location, username, password):
 
     if password == users[username]:
         logging.debug("User %s in group %s success" % (username, group))
-        return {"present": True}
+        return ["present"]
 
     logging.debug("User %s in group %s failure" % (username, group))
     return None
