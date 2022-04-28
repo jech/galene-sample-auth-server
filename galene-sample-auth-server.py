@@ -4,7 +4,7 @@
 import logging
 import argparse
 from datetime import datetime, timezone, timedelta
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urljoin
 import json
 import jwt
 from aiohttp import web
@@ -15,6 +15,8 @@ parser.add_argument("-p", "--port", metavar="PORT", type=int, required=True,
                     help="port to listen on")
 parser.add_argument("-k", "--key", metavar="FILE", required=True,
                     help="private key in JWK format")
+parser.add_argument("-r", "--redirect", metavar="URL",
+                    help="behave as an authorisation portal")
 parser.add_argument("--log", metavar="LEVEL",
                     help="logging level (DEBUG, INFO, WARNING, ERROR)")
 args = parser.parse_args()
@@ -22,8 +24,12 @@ args = parser.parse_args()
 if args.log != None:
     level = getattr(logging, args.log.upper(), None)
     if not isinstance(level, int):
-        raise ValueError('Invalid log level: %s' % loglevel)
+        raise ValueError('Invalid log level: %s' % level)
     logging.basicConfig(level=level)
+
+redirect = None
+if args.redirect != None:
+    redirect = urlparse(args.redirect)
 
 def read_key(filename):
     with open(filename) as f:
@@ -48,7 +54,7 @@ groups = {
     }
 }
 
-# This function should be replaced with one that authentifies users,
+# user_permissions should be replaced with one that authentifies users,
 # e.g. by checking with an LDAP server.
 def user_permissions(location, username, password):
     '''returns a list of permissions if the user is authorised to log into
@@ -81,44 +87,93 @@ def user_permissions(location, username, password):
     logging.debug("User %s in group %s failure" % (username, group))
     return None
 
-async def handler(request):
-    if request.method != "POST":
-        logging.debug("Bad method %s" % request.method)
-        return web.HTTPMethodNotAllowed(request.method, ["POST"])
+# makeToken generates a signed token carrying the given data
+def makeToken(issuer, location, username, password):
+    perms = user_permissions(location, username, password)
+    if perms is None:
+        return None
+
+    now = datetime.now(tz=timezone.utc)
+    token = {
+        "sub": username,
+        "aud": location,
+        "permissions": perms,
+        "iat": now,
+        "exp": now + timedelta(seconds=30),
+        "iss": issuer,
+    }
+
+    return jwt.encode(token, key, algorithm=key_alg)
+
+# serverHandler implements the authorisation server
+async def serverHandler(request):
     try:
-        body = await request.json()
+        data = await request.json()
     except json.decoder.JSONDecodeError as err:
         logging.debug("Bad request: %s" % err)
         return web.HTTPBadRequest()
 
-    if not ("username" in body and "location" in body and "password" in body):
+    if not ("username" in data and "location" in data and "password" in data):
         logging.debug("Bad request: missing fields")
         return web.HTTPBadRequest()
 
-    perms = user_permissions(
-        body["location"], body["username"], body["password"],
+    token = makeToken(
+        str(request.url), data["location"], data["username"], data["password"],
     )
-    if perms is None:
+    if token is None:
         return web.HTTPUnauthorized()
 
-    now = datetime.now(tz=timezone.utc)
-    token = {
-        "sub": body["username"],
-        "aud": body["location"],
-        "permissions": perms,
-        "iat": now,
-        "exp": now + timedelta(seconds=30),
-        "iss": str(request.url),
-    }
-
-    signed = jwt.encode(token, key, algorithm=key_alg)
     return web.Response(
-        headers={"Content-Type": "aplication/jwt"},
-        body=signed,
+        headers = {"Content-Type": "aplication/jwt"},
+        body = token,
     )
 
+# portalHandler implements the landing page of the portal.
+async def portalHandler(request):
+    return web.Response(
+        headers = {"Content-Type": "text/html; charset=utf-8"},
+        body = (
+            '<!DOCTYPE html>'
+            '<html lang="en">'
+            '<head>'
+            '<title>Galene login page</title>'
+            '</head>'
+            '<body>'
+            '<form action="/redirect" method="post">'
+            '<label for="group">Group:</label>'
+            '<input id="group" type="text" name="group"/>'
+            '<label for="username">Username:</label>'
+            '<input id="username" type="text" name="username"/>'
+            '<label for="password">Password:</label>'
+            '<input id="password" type="password" name="password"/>'
+            '<input type="submit" value="Join"/>'
+            '</form>'
+            '</body>'
+            '</html>'
+        )
+    )
+
+# redirectHandler parses the form from the landing page
+async def redirectHandler(request):
+    data = await request.post()
+    if not ("username" in data and "group" in data and "password" in data):
+        logging.debug("Bad request: missing fields")
+        return web.HTTPBadRequest()
+
+    location = urljoin(urljoin(args.redirect, "group/"), data["group"] + "/")
+    token = makeToken(
+        str(request.url), location, data["username"], data["password"],
+    )
+    if token is None:
+        return web.HTTPUnauthorized()
+    return web.HTTPFound(urljoin(location, "?token=" + token))
+
 app = web.Application()
-route = app.router.add_route("POST", "/", handler)
+route = app.router.add_route("POST", "/", serverHandler)
+if not (redirect is None):
+    app.router.add_route("GET", "/", portalHandler)
+    app.router.add_route("POST", "/redirect", redirectHandler)
+
 cors = aiohttp_cors.setup(app, defaults={
     "*": aiohttp_cors.ResourceOptions(
         expose_headers="*",
@@ -126,4 +181,5 @@ cors = aiohttp_cors.setup(app, defaults={
     )
 })
 cors.add(route)
+
 web.run_app(app, port=args.port)

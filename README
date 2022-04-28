@@ -1,20 +1,25 @@
 This is a sample authentication server for the Galene videoconference
-server <https://galene.org>.
+server <https://galene.org>.  It implements two distinct authorisation
+flows: it may act as an "authorisation server", where Galene's Javscript
+code consults the server, or as an "authorisation portal", where the user
+logs into the portal which then securely redirects to Galene.
 
-You should first modify the function `user_permissions` to do
-authentication suitable for your site, for example by consulting an LDAP
-database.
+# Preliminaries
 
-Then, generate a JWK:
+In either case, you should first modify the function `user_permissions` to
+do authentication suitable for your site, for example by consulting an
+LDAP database.  Then, generate a JWK:
 
     jose jwk gen -i '{"alg":"ES256"}' -o private.jwk
     jose jwk pub -i private.jwk -o public.jwk
 
-Run the auth server:
+# Use as an authentication server
+
+Run the server:
 
     python galene-sample-auth-server.py -k private.jwk -p 1234
 
-And finally configure a group in Galene:
+Configure the group in Galene:
 
     {
         "authServer": "http://localhost:1234/",
@@ -23,6 +28,22 @@ And finally configure a group in Galene:
         ]
     }
 
+Point your browser at the usual URL <https://galene.example.org:8443/>
 
-    
-  
+
+# Use as an authentication portal
+
+Run the server:
+
+    python galene-sample-auth-server.py -k private.jwk -p 1234 -r https://galene.example.org:8443/
+
+Configure the group in Galene:
+
+    {
+        "authPortal": "http://galene.example.org:1234/",
+        "authKeys": [
+            {...insert public key here... }
+        ]
+    }
+
+Point your browser at <http://galene.example.org:1234>
