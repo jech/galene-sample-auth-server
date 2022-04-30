@@ -124,7 +124,7 @@ async def serverHandler(request):
         return web.HTTPUnauthorized()
 
     return web.Response(
-        headers = {"Content-Type": "aplication/jwt"},
+        headers = {"Content-Type": "application/jwt"},
         body = token,
     )
 
