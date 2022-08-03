@@ -4,6 +4,11 @@ flows: it may act as an "authorisation server", where Galene's Javscript
 code consults the server, or as an "authorisation portal", where the user
 logs into the portal which then securely redirects to Galene.
 
+This example was written in Python and designed to be easy to understand
+and to extend.  For a more useful example, written in Go, please see
+<https://github.com/jech/galene-ldap>.
+
+
 # Preliminaries
 
 In either case, you should first modify the function `user_permissions` to
