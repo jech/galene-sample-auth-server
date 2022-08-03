@@ -107,6 +107,10 @@ def makeToken(issuer, location, username, password):
 
 # serverHandler implements the authorisation server
 async def serverHandler(request):
+    if request.content_type.lower() != "application/json":
+        logging.debug("Unexpected content type")
+        return web.HTTPBadRequest()
+
     try:
         data = await request.json()
     except json.decoder.JSONDecodeError as err:
