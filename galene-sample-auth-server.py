@@ -59,7 +59,7 @@ groups = {
 def user_permissions(location, username, password):
     '''returns a list of permissions if the user is authorised to log into
        the group, None otherwise.  The returned list may contain the strings
-       "present", "record" and "op".
+       "present", "record", "message" and "op".
     '''
 
     url = urlparse(location)
@@ -82,7 +82,7 @@ def user_permissions(location, username, password):
 
     if password == users[username]:
         logging.debug("User %s in group %s success" % (username, group))
-        return ["present"]
+        return ["present", "message"]
 
     logging.debug("User %s in group %s failure" % (username, group))
     return None
